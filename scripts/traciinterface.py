@@ -10,9 +10,8 @@ import subprocess
 import random
 import copy
 import numpy as np
-from traci import _trafficlight
 
-from mysqlDb import insert_in_db
+# from mysqlDb import insert_in_db
 
 try:
     sys.path.append(os.path.join(os.path.dirname(
@@ -114,7 +113,11 @@ def run(i):
                 temp1.append(traci.edge.getTraveltime(j))
                 temp2.append(traci.edge.getWaitingTime(j))
 
-            allWaitingTime.append(sum(temp1) / sum(alldeparted))
+            if (sum(alldeparted) == 0):
+                allWaitingTime.append(sum(temp1))
+            else:
+                allWaitingTime.append(sum(temp1) / sum(alldeparted))
+
             allTravelTime.append(sum(temp2))
             print()
             print("----------------------------------------------------------------------")
@@ -140,7 +143,11 @@ def run(i):
             fitnessParticle.append(fitness)
             print("Phases: ", PSOphase[0], "Its fitness: ", fitness)
 
-            waiting_time = sum(temp1) / sum(alldeparted)
+            if (sum(alldeparted) == 0):
+                waiting_time = sum(temp1)
+            else:
+                waiting_time = sum(temp1) / sum(alldeparted)
+
             travel_time = sum(temp2)
             current_simulation_time = traci.simulation.getTime()
 
@@ -148,8 +155,8 @@ def run(i):
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(PSOphase[0])
 
-            insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
-                         current_phase, fitness)
+            # insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
+            #              current_phase, fitness)
 
             useAlgoAndSetPhase()
             """	
@@ -242,15 +249,19 @@ def run(i):
 
             print("Phases: ", particle[0], "Its fitness: ", fitness)
 
-            waiting_time = sum(temp1) / sum(alldeparted)
+            if (sum(alldeparted) == 0):
+                waiting_time = sum(temp1)
+            else:
+                waiting_time = sum(temp1) / sum(alldeparted)
+
             travel_time = sum(temp2)
             current_simulation_time = traci.simulation.getTime()
             sum_arrived = sum(allarrived)
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(particle[0])
-
-            insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
-                         current_phase, fitness)
+            #
+            # insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
+            #              current_phase, fitness)
 
             useAlgoAndSetPhase()
             """
@@ -404,9 +415,11 @@ if __name__ == "__main__":
     global pgf
     pgf = []
     BestResults = []
+
+    traci.start([sumoBinary, "-c", "../city.sumocfg",
+                 "--tripinfo-output", "../tripinfo.xml"])
+
     for i in range(10):
-        traci.start([sumoBinary, "-c", "../city.sumocfg",
-                     "--tripinfo-output", "../tripinfo.xml"])
 
         resultsOfi = run(i)
         bestphase = resultsOfi[0]
