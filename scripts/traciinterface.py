@@ -11,8 +11,6 @@ import random
 import copy
 import numpy as np
 
-# from mysqlDb import insert_in_db
-
 try:
     sys.path.append(os.path.join(os.path.dirname(
         __file__), '..', '..', '..', '..', "tools"))  # tutorial in tests
@@ -76,6 +74,9 @@ def run(i):
     global allTravelTime
     allTravelTime = []
 
+    global allEmissionCO2
+    allEmissionCO2 = []
+
     global allarrived
     allarrived = []
     global alldeparted
@@ -102,6 +103,12 @@ def run(i):
             phaseParticle.append(PSOphase)
             temp1 = []
             temp2 = []
+
+            co2_emission_edge = []
+            co_emission_edge = []
+            fuel_consumption = []
+            noise_emission = []
+
             phase = (PSOphase[0][0] + PSOphase[0][1] + PSOphase[0][2]) / 3
             runDeviceDetect(phase)
             """
@@ -112,6 +119,10 @@ def run(i):
             for j in edgeIDs:
                 temp1.append(traci.edge.getTraveltime(j))
                 temp2.append(traci.edge.getWaitingTime(j))
+                co2_emission_edge.append(traci.edge.getCO2Emission(j))
+                co_emission_edge.append(traci.edge.getCOEmission(j))
+                fuel_consumption.append(traci.edge.getFuelConsumption(j))
+                noise_emission.append(traci.edge.getNoiseEmission(j))
 
             if (sum(alldeparted) == 0):
                 allWaitingTime.append(sum(temp1))
@@ -119,6 +130,14 @@ def run(i):
                 allWaitingTime.append(sum(temp1) / sum(alldeparted))
 
             allTravelTime.append(sum(temp2))
+
+            total_co2_emission = sum(co2_emission_edge)
+            total_co_emission = sum(co_emission_edge)
+            total_fuel_consumption = sum(fuel_consumption)
+            total_noise_emission = sum(noise_emission)
+
+            allEmissionCO2.append(total_co2_emission)
+
             print()
             print("----------------------------------------------------------------------")
             print()
@@ -130,7 +149,11 @@ def run(i):
             print(allTravelTime)
             print("Arrived cars: ", sum(allarrived))
             print("Departed cars: ", sum(alldeparted))
-            print("Current Simulation time : ", traci.simulation.getTime())
+            print("CO2 Emission in mg: ", total_co2_emission)
+            print("Total CO emission in mg : ", total_co_emission)
+            print("Total fuel consumption in ml : ", total_fuel_consumption)
+            print("Total Emission in db : ", total_noise_emission)
+            print("Current Simulation time in s: ", traci.simulation.getTime())
 
             Cr = phase * (7 / 21)
             if sum(allarrived) == 0:
@@ -155,8 +178,10 @@ def run(i):
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(PSOphase[0])
 
-            # insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
-            #              current_phase, fitness)
+            # print("CO2 Emission in mg: ", total_co2_emission)
+            # print("Total CO emission in mg : ", total_co_emission)
+            # print("Total fuel consumption in ml : ", total_fuel_consumption)
+            # print("Total Emission in db : ", total_noise_emission)
 
             useAlgoAndSetPhase()
             """	
@@ -201,6 +226,10 @@ def run(i):
             # traci.simulationStep()
             temp1 = []
             temp2 = []
+            co2_emission_edge = []
+            co_emission_edge = []
+            fuel_consumption = []
+            noise_emission = []
 
             particle = updated[h]
             # print ("len of updated",len(updated))
@@ -217,6 +246,7 @@ def run(i):
             for j in edgeIDs:
                 temp1.append(traci.edge.getTraveltime(j))
                 temp2.append(traci.edge.getWaitingTime(j))
+                co2_emission_edge.append(traci.edge.getCO2Emission(j))
 
             if (sum(alldeparted) == 0):
                 allWaitingTime.append(sum(temp1))
@@ -224,6 +254,14 @@ def run(i):
                 allWaitingTime.append(sum(temp1) / sum(alldeparted))
 
             allTravelTime.append(sum(temp2))
+
+            total_co2_emission = sum(co2_emission_edge)
+            total_co_emission = sum(co_emission_edge)
+            total_fuel_consumption = sum(fuel_consumption)
+            total_noise_emission = sum(noise_emission)
+
+            allEmissionCO2.append(total_co2_emission)
+
             print()
             print("-----------------------------------------------------------------")
             print()
@@ -235,7 +273,12 @@ def run(i):
             print(allTravelTime)
             print("Arrived cars : ", sum(allarrived))
             print("Departed cars : ", sum(alldeparted))
+            print("CO2 Emission : ", total_co2_emission)
             print("Current Simulation time : ", traci.simulation.getTime())
+            print("Total CO emission in mg : ", total_co_emission)
+            print("Total fuel consumption in ml : ", total_fuel_consumption)
+            print("Total Emission in db : ", total_noise_emission)
+            print("Current Simulation time in s: ", traci.simulation.getTime())
 
             Cr = phase * (7 / 21)
             if sum(allarrived) == 0:
@@ -259,9 +302,7 @@ def run(i):
             sum_arrived = sum(allarrived)
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(particle[0])
-            #
-            # insert_in_db(steps, phase, waiting_time, travel_time, sum_arrived, sum_departed, current_simulation_time,
-            #              current_phase, fitness)
+
 
             useAlgoAndSetPhase()
             """
@@ -418,6 +459,10 @@ if __name__ == "__main__":
 
     traci.start([sumoBinary, "-c", "../city.sumocfg",
                  "--tripinfo-output", "../tripinfo.xml"])
+
+    # traci.start([sumoBinary, "-c", "C:/wamp64/www/Traffic_Signal_Optimization_PSO/city.sumocfg",
+    #              "--tripinfo-output", "C:/wamp64/www/Traffic_Signal_Optimization_PSO/tripinfo.xml"])
+
 
     for i in range(10):
 

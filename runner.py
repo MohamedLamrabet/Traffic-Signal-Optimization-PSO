@@ -38,7 +38,7 @@ def run_sumo( summaryFile='summary.xml'):
     travel_times = []
     nsims = 1
 
-    for j in xrange(nsims):
+    for j in range(nsims):
 
         sumoBinary = checkBinary('sumo')
 
@@ -64,12 +64,12 @@ def run_sumo( summaryFile='summary.xml'):
         for i in TLIds:
             print(traci.trafficlights.setPhaseDuration(i,5))
 
-    print "Mean travel time:", (sum(travel_times) / len(travel_times))
+    print("Mean travel time:", (sum(travel_times) / len(travel_times)))
     print("sana")
     return (sum(travel_times) / len(travel_times))
 def main():
     run_sumo()
-    print("sana")
+    print("med")
 
     #sumoCmd = [sumoBinary, "-c", sumoConfig, "--start"]
     #traci.start(sumoCmd)
