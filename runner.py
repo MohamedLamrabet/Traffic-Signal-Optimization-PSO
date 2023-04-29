@@ -42,11 +42,16 @@ def run_sumo( summaryFile='summary.xml'):
 
         sumoBinary = checkBinary('sumo')
 
+        # sumoCmd = [sumoBinary, "-c", "C:/wamp64/www/traffic_pso/city.sumocfg", "-n",
+        #            "C:/wamp64/www/traffic_pso/city.net.xml", "-r", "C:/wamp64/www/traffic_pso/trips.trips.xml",
+        #            "--max-num-vehicles=100"]
+
         # this is the normal way of using traci. sumo is started as a
         # subprocess and then the python script connects and runs
         sumoProcess = subprocess.Popen([sumoBinary, "-c", "city.sumocfg", #"--additional-files", "city.add.xml", 
                                         "--tripinfo-output", "tripinfo.xml", #"--duration-log.statistics", "true", 
                                         "--summary", summaryFile, "--remote-port", str(PORT)], stdout=sys.stdout, stderr=sys.stderr)
+
         run()
         sumoProcess.wait()
         
@@ -60,16 +65,14 @@ def run_sumo( summaryFile='summary.xml'):
 
         travel_times.append(totalTravel / prev_num_cars_done)
         
-        TLIds = traci.trafficlights.getIDList()
+        TLIds = traci.trafficlight.getIDList()
         for i in TLIds:
-            print(traci.trafficlights.setPhaseDuration(i,5))
+            print(traci.trafficlight.setPhaseDuration(i,5))
 
     print("Mean travel time:", (sum(travel_times) / len(travel_times)))
-    print("sana")
     return (sum(travel_times) / len(travel_times))
 def main():
     run_sumo()
-    print("med")
 
     #sumoCmd = [sumoBinary, "-c", sumoConfig, "--start"]
     #traci.start(sumoCmd)

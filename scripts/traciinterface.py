@@ -6,10 +6,11 @@ import json
 import os
 import sys
 import optparse
-import subprocess
 import random
-import copy
 import numpy as np
+import inquirer
+
+from mysqlDb import insertInDB, insertBestPhases, getSimulationTimeFromDB, getNumberOfGenerationFromDB
 
 try:
     sys.path.append(os.path.join(os.path.dirname(
@@ -65,9 +66,10 @@ junction_R.neighbours = [{'junction': junction_L, 'connection': ('a', 'c'), 'dat
 
 # ========================================run()=========================================
 
-def run(i):
+def run(i, fitnessID, optID):
     global steps
     steps = 0
+
     endSimTIme = 30
     global allWaitingTime
     allWaitingTime = []
@@ -84,6 +86,9 @@ def run(i):
     fitnessParticle = []
     phaseParticle = []
 
+    fitnessFunctionID = fitnessID
+    optimizationID = optID
+
     initial = [[[50, 23, 59], 0], [[23, 50, 45], 1], [[52, 7, 49], 1], [[22, 59, 38], 0], [[25, 7, 44], 0],
                [[32, 56, 59], 0], [[15, 46, 9], 1], [[10, 8, 44], 0], [[6, 57, 27], 0], [[40, 10, 33], 1],
                [[45, 44, 14], 0], [[59, 19, 56], 0], [[22, 12, 28], 1], [[8, 23, 26], 0], [[45, 16, 39], 1],
@@ -96,13 +101,17 @@ def run(i):
     if i == 0:
         while steps < endSimTIme:
 
+            num_stops = {}
+            total_num_stops = 0
+            total_delay = 0
+
             # traci.simulationStep()
             # PSOphase = individual(3)
             PSOphase = initial[x]
             x += 1
             phaseParticle.append(PSOphase)
-            temp1 = []
-            temp2 = []
+            travelTime = []
+            waitingTime = []
 
             co2_emission_edge = []
             co_emission_edge = []
@@ -112,24 +121,24 @@ def run(i):
             phase = (PSOphase[0][0] + PSOphase[0][1] + PSOphase[0][2]) / 3
             runDeviceDetect(phase)
             """
-    gets data from devices for
-    junctions for "time" number of simulation steps
-        """
+            gets data from devices for
+            junctions for "time" number of simulation steps
+            """
             edgeIDs = traci.edge.getIDList()
             for j in edgeIDs:
-                temp1.append(traci.edge.getTraveltime(j))
-                temp2.append(traci.edge.getWaitingTime(j))
+                travelTime.append(traci.edge.getTraveltime(j))
+                waitingTime.append(traci.edge.getWaitingTime(j))
                 co2_emission_edge.append(traci.edge.getCO2Emission(j))
                 co_emission_edge.append(traci.edge.getCOEmission(j))
                 fuel_consumption.append(traci.edge.getFuelConsumption(j))
                 noise_emission.append(traci.edge.getNoiseEmission(j))
 
             if (sum(alldeparted) == 0):
-                allWaitingTime.append(sum(temp1))
+                allWaitingTime.append(sum(waitingTime))
             else:
-                allWaitingTime.append(sum(temp1) / sum(alldeparted))
+                allWaitingTime.append(sum(waitingTime) / sum(alldeparted))
 
-            allTravelTime.append(sum(temp2))
+            allTravelTime.append(sum(travelTime))
 
             total_co2_emission = sum(co2_emission_edge)
             total_co_emission = sum(co_emission_edge)
@@ -138,10 +147,30 @@ def run(i):
 
             allEmissionCO2.append(total_co2_emission)
 
+            # Get a list of all vehicles in the simulation
+            vehicles = traci.vehicle.getIDList()
+            num_vehicles = len(vehicles)
+
+            # Check each vehicle's current edge and speed to determine if it's stopped
+            for vehicle_id in vehicles:
+                current_edge = traci.vehicle.getRoadID(vehicle_id)
+                current_speed = traci.vehicle.getSpeed(vehicle_id)
+                total_delay += traci.vehicle.getAccumulatedWaitingTime(vehicle_id)
+
+                # If the vehicle is stopped, increment the stop count for the current edge
+                if current_speed < 0.1:
+                    if current_edge in num_stops:
+                        num_stops[current_edge] += 1
+                    else:
+                        num_stops[current_edge] = 1
+            for edge in num_stops:
+                total_num_stops += num_stops[edge]
+
             print()
             print("----------------------------------------------------------------------")
             print()
             print("Step : ", steps)
+            print(f"There are {num_vehicles} vehicles in the network.")
             print("Avg phase ", phase)
             print("Waiting time: ")
             print(allWaitingTime)
@@ -153,35 +182,54 @@ def run(i):
             print("Total CO emission in mg : ", total_co_emission)
             print("Total fuel consumption in ml : ", total_fuel_consumption)
             print("Total Emission in db : ", total_noise_emission)
+            print("Total Number of stops : ", total_num_stops)
+            print("Total delay in s: ", total_delay)
             print("Current Simulation time in s: ", traci.simulation.getTime())
 
-            Cr = phase * (7 / 21)
-            if sum(allarrived) == 0:
-                fitness = (sum(temp2) + sum(temp1) + (
-                        sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / 1 + Cr
+            if fitnessFunctionID == 1:
+                # Fitness number of stops
+                fitness = total_num_stops
+
+            elif fitnessFunctionID == 2:
+                # Fitness co2 emission
+                fitness = total_co2_emission
+
+            elif fitnessFunctionID == 3:
+                # Fitness total delay
+                fitness = total_delay
+
             else:
-                fitness = (sum(temp2) + sum(temp1) + (
-                        sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / (
-                              sum(allarrived)) ** 2 + Cr
+                # Fitness Travel time
+
+                Cr = phase * (7 / 21)
+                if sum(allarrived) == 0:
+                    fitness = (sum(waitingTime) + sum(travelTime) + (
+                            sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / 1 + Cr
+                else:
+                    fitness = (sum(waitingTime) + sum(travelTime) + (
+                            sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / (
+                                  sum(allarrived)) ** 2 + Cr
+
+
             fitnessParticle.append(fitness)
             print("Phases: ", PSOphase[0], "Its fitness: ", fitness)
 
             if (sum(alldeparted) == 0):
-                waiting_time = sum(temp1)
+                waiting_time = sum(waitingTime)
             else:
-                waiting_time = sum(temp1) / sum(alldeparted)
+                waiting_time = sum(waitingTime) / sum(alldeparted)
 
-            travel_time = sum(temp2)
+            travel_time = sum(travelTime)
             current_simulation_time = traci.simulation.getTime()
 
             sum_arrived = sum(allarrived)
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(PSOphase[0])
 
-            # print("CO2 Emission in mg: ", total_co2_emission)
-            # print("Total CO emission in mg : ", total_co_emission)
-            # print("Total fuel consumption in ml : ", total_fuel_consumption)
-            # print("Total Emission in db : ", total_noise_emission)
+            insertInDB(i, optimizationID, steps, phase, waiting_time, travel_time, total_delay, total_num_stops,
+                       sum_arrived, sum_departed, total_co2_emission,
+                       total_co_emission, current_simulation_time, total_fuel_consumption, total_noise_emission,
+                       current_phase, fitness)
 
             useAlgoAndSetPhase()
             """	
@@ -215,8 +263,6 @@ def run(i):
 
         fitnessParticle = []
 
-        # print("phases: ",AllPSOphase,"fitness: ",allFitness)
-        # print(len(AllPSOphase[-1]))
         updated = PSO(AllPSOphase[-1], allFitness[-1], pg, pgf)
 
         AllPSOphase.append(updated)
@@ -224,12 +270,15 @@ def run(i):
 
         while steps < endSimTIme:
             # traci.simulationStep()
-            temp1 = []
-            temp2 = []
+            travelTime = []
+            waitingTime = []
             co2_emission_edge = []
             co_emission_edge = []
             fuel_consumption = []
             noise_emission = []
+            num_stops = {}
+            total_num_stops = 0
+            total_delay = 0
 
             particle = updated[h]
             # print ("len of updated",len(updated))
@@ -237,23 +286,26 @@ def run(i):
             phase = (particle[0][0] + particle[0][1] + particle[0][2]) / 3
             runDeviceDetect(phase)
             """
-          gets data from devices for
-          junctions for "time" number of simulation steps
+                gets data from devices for
+                junctions for "time" number of simulation steps
             """
 
             edgeIDs = traci.edge.getIDList()
 
             for j in edgeIDs:
-                temp1.append(traci.edge.getTraveltime(j))
-                temp2.append(traci.edge.getWaitingTime(j))
+                travelTime.append(traci.edge.getTraveltime(j))
+                waitingTime.append(traci.edge.getWaitingTime(j))
                 co2_emission_edge.append(traci.edge.getCO2Emission(j))
+                co_emission_edge.append(traci.edge.getCOEmission(j))
+                fuel_consumption.append(traci.edge.getFuelConsumption(j))
+                noise_emission.append(traci.edge.getNoiseEmission(j))
 
             if (sum(alldeparted) == 0):
-                allWaitingTime.append(sum(temp1))
+                allWaitingTime.append(sum(waitingTime))
             else:
-                allWaitingTime.append(sum(temp1) / sum(alldeparted))
+                allWaitingTime.append(sum(waitingTime) / sum(alldeparted))
 
-            allTravelTime.append(sum(temp2))
+            allTravelTime.append(sum(travelTime))
 
             total_co2_emission = sum(co2_emission_edge)
             total_co_emission = sum(co_emission_edge)
@@ -262,10 +314,31 @@ def run(i):
 
             allEmissionCO2.append(total_co2_emission)
 
+            # Get a list of all vehicles in the simulation
+            vehicles = traci.vehicle.getIDList()
+            num_vehicles = len(vehicles)
+
+            # Check each vehicle's current edge and speed to determine if it's stopped
+            for vehicle_id in vehicles:
+                current_edge = traci.vehicle.getRoadID(vehicle_id)
+                current_speed = traci.vehicle.getSpeed(vehicle_id)
+                total_delay += traci.vehicle.getAccumulatedWaitingTime(vehicle_id)
+
+                # If the vehicle is stopped, increment the stop count for the current edge
+                if current_speed < 0.1:
+                    if current_edge in num_stops:
+                        num_stops[current_edge] += 1
+                    else:
+                        num_stops[current_edge] = 1
+
+            for edge in num_stops:
+                total_num_stops += num_stops[edge]
+
             print()
             print("-----------------------------------------------------------------")
             print()
             print("Step : ", steps)
+            print(f"There are {num_vehicles} vehicles in the network.")
             print("Avg phase : ", phase)
             print("Waiting time : ")
             print(allWaitingTime)
@@ -273,41 +346,61 @@ def run(i):
             print(allTravelTime)
             print("Arrived cars : ", sum(allarrived))
             print("Departed cars : ", sum(alldeparted))
-            print("CO2 Emission : ", total_co2_emission)
-            print("Current Simulation time : ", traci.simulation.getTime())
+            print("CO2 Emission in mg: ", total_co2_emission)
             print("Total CO emission in mg : ", total_co_emission)
             print("Total fuel consumption in ml : ", total_fuel_consumption)
             print("Total Emission in db : ", total_noise_emission)
+            print("Total Number of stops : ", total_num_stops)
+            print("Total delay in s: ", total_delay)
             print("Current Simulation time in s: ", traci.simulation.getTime())
 
-            Cr = phase * (7 / 21)
-            if sum(allarrived) == 0:
-                fitness = (sum(temp2) + sum(temp1) + (
-                        sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / 1 + Cr
+            if fitnessFunctionID == 1:
+                # Fitness number of stops
+                fitness = total_num_stops
+
+            elif fitnessFunctionID == 2:
+                # Fitness co2 emission
+                fitness = total_co2_emission
+
+            elif fitnessFunctionID == 3:
+                # Fitness total delay
+                fitness = total_delay
+
             else:
-                fitness = (sum(temp2) + sum(temp1) + (
-                        sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / (
-                              sum(allarrived)) ** 2 + Cr
+                # Fitness Travel time
+                Cr = phase * (7 / 21)
+                if sum(allarrived) == 0:
+                    fitness = (sum(waitingTime) + sum(travelTime) + (
+                            sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / 1 + Cr
+                else:
+                    fitness = (sum(waitingTime) + sum(travelTime) + (
+                            sum(alldeparted) - sum(allarrived)) * traci.simulation.getTime()) / (
+                                  sum(allarrived)) ** 2 + Cr
+
             fitnessParticle.append(fitness)
 
             print("Phases: ", particle[0], "Its fitness: ", fitness)
 
             if (sum(alldeparted) == 0):
-                waiting_time = sum(temp1)
+                waiting_time = sum(waitingTime)
             else:
-                waiting_time = sum(temp1) / sum(alldeparted)
+                waiting_time = sum(waitingTime) / sum(alldeparted)
 
-            travel_time = sum(temp2)
+            travel_time = sum(travelTime)
             current_simulation_time = traci.simulation.getTime()
             sum_arrived = sum(allarrived)
             sum_departed = sum(alldeparted)
             current_phase = json.dumps(particle[0])
 
+            insertInDB(i, optimizationID, steps, phase, waiting_time, travel_time, total_delay, total_num_stops,
+                       sum_arrived, sum_departed, total_co2_emission,
+                       total_co_emission, current_simulation_time, total_fuel_consumption, total_noise_emission,
+                       current_phase, fitness)
 
             useAlgoAndSetPhase()
             """
-        use an algorithm to set the phase for the junctions
-        """
+            use an algorithm to set the phase for the junctions
+            """
             prepareJunctionVectArrs()
             '''
                prepare the vehicleVectarr for junctions
@@ -388,9 +481,9 @@ def updateParticle(particles, pB, pG):
     randRou2 = random.uniform(0, 1)
     w = random.uniform(0.5, 1.0)
 
-    vPlus1 = w * particles[1] + randRou1 * ((pB[0][0] - particles[0][0]) + (pB[0][1] - particles[0][1]) + (
-            pB[0][2] - particles[0][2])) + randRou2 * (
-                     (pG[0][0] - particles[0][0]) + (pG[0][1] - particles[0][1]) + (pG[0][2] - particles[0][2]))
+    vPlus1 = w * particles[1] \
+             + randRou1 * ((pB[0][0] - particles[0][0]) + (pB[0][1] - particles[0][1]) + (pB[0][2] - particles[0][2])) \
+             + randRou2 * ((pG[0][0] - particles[0][0]) + (pG[0][1] - particles[0][1]) + (pG[0][2] - particles[0][2]))
 
     particles[0][0] = abs(int(particles[0][0] + vPlus1))
     particles[0][1] = abs(int(particles[0][1] + vPlus1))
@@ -456,27 +549,75 @@ if __name__ == "__main__":
     global pgf
     pgf = []
     BestResults = []
+    bestFitnessResults = []
 
-    traci.start([sumoBinary, "-c", "../city.sumocfg",
-                 "--tripinfo-output", "../tripinfo.xml"])
+    questions = [
+        inquirer.List('fitness',
+                      message="Choose the fitness do you want?",
+                      choices=['Number of stops', 'CO2 emission', 'Total delay', 'Travel time'],
+                      ),
+    ]
+    answers = inquirer.prompt(questions)
 
-    # traci.start([sumoBinary, "-c", "C:/wamp64/www/Traffic_Signal_Optimization_PSO/city.sumocfg",
-    #              "--tripinfo-output", "C:/wamp64/www/Traffic_Signal_Optimization_PSO/tripinfo.xml"])
+    print("*****************************")
+    print("Fitness: ", answers["fitness"])
+    print("*****************************")
 
+    # number of stops = 1, co2 emission = 2, total delay = 3, else travel time
 
-    for i in range(10):
+    if answers["fitness"] == 'Number of stops':
+        fitnessFunctionID = 1
+    elif answers["fitness"] == 'CO2 emission':
+        fitnessFunctionID = 2
+    elif answers["fitness"] == 'Total delay':
+        fitnessFunctionID = 3
+    else:
+        fitnessFunctionID = 4
 
-        resultsOfi = run(i)
+    iterations =  int(input('Enter the number of iterations:'))
+    print("*****************************")
+    print("Nbr of iterations: ", iterations)
+    print("*****************************")
+
+    num_vehicles = int(input('Enter the max number of vehicles:'))
+    print("*****************************")
+    print("Max nbr of vehicles: ", num_vehicles)
+    print("*****************************")
+
+    optimizationID = 1
+
+    sumoCmd = [sumoBinary, "-c", "C:/wamp64/www/traffic_pso/city.sumocfg", "-n",
+               "C:/wamp64/www/traffic_pso/city.net.xml", "-r", "C:/wamp64/www/traffic_pso/trips.trips.xml",
+               "--max-num-vehicles={}".format(num_vehicles)
+               ]
+    # traci.start([sumoBinary, "-c", "C:/wamp64/www/traffic_pso/city.sumocfg",
+    #              "--tripinfo-output", "C:/wamp64/www/traffic_pso/tripinfo.xml"])
+
+    # sumoCmd = ['sumo-gui', '-n', 'path/to/city.net.xml', '-r', 'path/to/trips.trips.xml']
+
+    traci.start(sumoCmd)
+
+    # simulation_time = getSimulationTimeFromDB()
+    # number_of_generation = getNumberOfGenerationFromDB()
+
+    for i in range(iterations):
+        resultsOfi = run(i, fitnessFunctionID, optimizationID)
+
         bestphase = resultsOfi[0]
-        bestfitness = resultsOfi[1]
+        bestFitness = resultsOfi[1]
         print("End of iteration: ", i)
         print("Best phases :")
         print(bestphase[-1][0])
+        print("Best fitness :")
+        print(bestFitness[i])
         print("----------------------------------------------------------------")
-        # print("and its fitness for the entire iteration: " )
-        # print(bestfitness[-1])
         BestResults.append(bestphase[-1][0])
-        # print("BestResults: ",BestResults)
+        bestFitnessResults.append(bestFitness[i])
+
+        insertBestPhases(optimizationID, i, bestphase[-1][0], bestFitness[i])
+
+    print("Best fitness of all iterations: ")
+    print(bestFitnessResults)
     print("Best phases of all iterations: ")
     print(BestResults)
 
