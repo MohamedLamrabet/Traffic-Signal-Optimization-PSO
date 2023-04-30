@@ -11,4 +11,6 @@
 1. Verify that Java is installed on your computer.
 2. Download the Metabase jar file from this link: https://www.metabase.com/start/oss/jar and place it in the metabase folder.
 3. Run Metabase using the following command: `java -jar metabase.jar`
-4. After metabase run, to view the simulation results, go to this link: : http://localhost:3000/dashboard/1-simulation-results
+4. After metabase run, to view the simulation results, go to this link: : http://localhost:3000/dashboard/1-simulation-results using these credentials:
+* **Login**: admin@admin.com 
+* **Password**: Admin@0123
