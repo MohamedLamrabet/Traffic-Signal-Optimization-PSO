@@ -1,11 +1,11 @@
+### Creating a MySQL Database
+1. Install WAMP or XAMPP for Windows, or LAMP for Linux. 
+2. Create a MySQL database named `traffic` and import the SQL file located at `database/traffic.sql`
+
 ### Running the SUMO Project
 1. Install SUMO software.
 2. Install Python version 3.10 or higher. 
 3. Open the command line in the root of the project and run the following command: `py .\scripts\traciinterface.py`
-
-### Creating a MySQL Database
-1. Install WAMP or XAMPP for Windows, or LAMP for Linux. 
-2. Create a MySQL database named `traffic` and import the SQL file located at `database/traffic.sql`
 
 ### Visualize the results of the simulation using Metabase
 1. Verify that Java is installed on your computer.
