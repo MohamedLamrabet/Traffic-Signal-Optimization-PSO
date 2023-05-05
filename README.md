@@ -5,7 +5,7 @@
 ### Running the SUMO Project
 1. Install SUMO software.
 2. Install Python version 3.10 or higher. 
-3. Open the command line in the root of the project and run the following command: `py .\scripts\traciinterface.py`
+3. Set current directory where the project exists then to "scripts" and run the following command: `py traciinterface.py`
 
 ### Visualize the results of the simulation using Metabase
 1. Verify that Java is installed on your computer.

@@ -586,14 +586,10 @@ if __name__ == "__main__":
 
     optimizationID = 1
 
-    sumoCmd = [sumoBinary, "-c", "C:/wamp64/www/traffic_pso/city.sumocfg", "-n",
-               "C:/wamp64/www/traffic_pso/city.net.xml", "-r", "C:/wamp64/www/traffic_pso/trips.trips.xml",
+    sumoCmd = [sumoBinary, "-c", "../city.sumocfg", "-n",
+               "../city.net.xml", "-r", "../trips.trips.xml",
                "--max-num-vehicles={}".format(num_vehicles)
                ]
-    # traci.start([sumoBinary, "-c", "C:/wamp64/www/traffic_pso/city.sumocfg",
-    #              "--tripinfo-output", "C:/wamp64/www/traffic_pso/tripinfo.xml"])
-
-    # sumoCmd = ['sumo-gui', '-n', 'path/to/city.net.xml', '-r', 'path/to/trips.trips.xml']
 
     traci.start(sumoCmd)
 
