@@ -591,6 +591,10 @@ if __name__ == "__main__":
                "--max-num-vehicles={}".format(num_vehicles)
                ]
 
+    # sumoCmd = [sumoBinary, "-c", "../city.sumocfg", "-n",
+    #            "../city.net.xml", "-r", "../trips.trips.xml"
+    #            ]
+
     traci.start(sumoCmd)
 
     # simulation_time = getSimulationTimeFromDB()
