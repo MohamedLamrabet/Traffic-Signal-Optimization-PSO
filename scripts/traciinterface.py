@@ -9,8 +9,9 @@ import optparse
 import random
 import numpy as np
 import inquirer
+from fitness import calculate_delay
 
-from mysqlDb import insertInDB, insertBestPhases, getSimulationTimeFromDB, getNumberOfGenerationFromDB
+from mysqlDb import insertInDB, insertBestPhases
 
 try:
     sys.path.append(os.path.join(os.path.dirname(
@@ -26,7 +27,6 @@ except ImportError:
 
 import traci
 from junction import Junction
-from device import Device
 from phaseConfig import setJunctionPhase
 
 # ===============================Generate Route File====================================
@@ -104,6 +104,7 @@ def run(i, fitnessID, optID):
             num_stops = {}
             total_num_stops = 0
             total_delay = 0
+            total_delay_hcm = 0
 
             # traci.simulationStep()
             # PSOphase = individual(3)
@@ -154,8 +155,10 @@ def run(i, fitnessID, optID):
             # Check each vehicle's current edge and speed to determine if it's stopped
             for vehicle_id in vehicles:
                 current_edge = traci.vehicle.getRoadID(vehicle_id)
+                current_lane = traci.vehicle.getLaneID(vehicle_id)
                 current_speed = traci.vehicle.getSpeed(vehicle_id)
                 total_delay += traci.vehicle.getAccumulatedWaitingTime(vehicle_id)
+                total_delay_hcm += calculate_delay(current_lane, vehicle_id)
 
                 # If the vehicle is stopped, increment the stop count for the current edge
                 if current_speed < 0.1:
@@ -183,7 +186,8 @@ def run(i, fitnessID, optID):
             print("Total fuel consumption in ml : ", total_fuel_consumption)
             print("Total Emission in db : ", total_noise_emission)
             print("Total Number of stops : ", total_num_stops)
-            print("Total delay in s: ", total_delay)
+            print("Total delay using SUMO in s: ", total_delay)
+            print("Total delay using HCM in s: ", total_delay_hcm)
             print("Current Simulation time in s: ", traci.simulation.getTime())
 
             if fitnessFunctionID == 1:
@@ -195,12 +199,16 @@ def run(i, fitnessID, optID):
                 fitness = total_co2_emission
 
             elif fitnessFunctionID == 3:
-                # Fitness total delay
+                # Fitness total delay using SUMO
                 fitness = total_delay
+
+            elif fitnessFunctionID == 4:
+                # Fitness total delay using HCM
+                fitness = total_delay_hcm
 
             else:
                 # Fitness Travel time
-
+                
                 Cr = phase * (7 / 21)
                 if sum(allarrived) == 0:
                     fitness = (sum(waitingTime) + sum(travelTime) + (
@@ -279,6 +287,7 @@ def run(i, fitnessID, optID):
             num_stops = {}
             total_num_stops = 0
             total_delay = 0
+            total_delay_hcm = 0
 
             particle = updated[h]
             # print ("len of updated",len(updated))
@@ -321,8 +330,10 @@ def run(i, fitnessID, optID):
             # Check each vehicle's current edge and speed to determine if it's stopped
             for vehicle_id in vehicles:
                 current_edge = traci.vehicle.getRoadID(vehicle_id)
+                current_lane = traci.vehicle.getLaneID(vehicle_id)
                 current_speed = traci.vehicle.getSpeed(vehicle_id)
                 total_delay += traci.vehicle.getAccumulatedWaitingTime(vehicle_id)
+                total_delay_hcm += calculate_delay(current_lane, vehicle_id)
 
                 # If the vehicle is stopped, increment the stop count for the current edge
                 if current_speed < 0.1:
@@ -351,7 +362,7 @@ def run(i, fitnessID, optID):
             print("Total fuel consumption in ml : ", total_fuel_consumption)
             print("Total Emission in db : ", total_noise_emission)
             print("Total Number of stops : ", total_num_stops)
-            print("Total delay in s: ", total_delay)
+            print("Total delay using SUMO in s: ", total_delay)
             print("Current Simulation time in s: ", traci.simulation.getTime())
 
             if fitnessFunctionID == 1:
@@ -363,8 +374,12 @@ def run(i, fitnessID, optID):
                 fitness = total_co2_emission
 
             elif fitnessFunctionID == 3:
-                # Fitness total delay
+                # Fitness total delay using SUMO
                 fitness = total_delay
+
+            elif fitnessFunctionID == 4:
+                # Fitness total delay using HCM
+                fitness = total_delay_hcm
 
             else:
                 # Fitness Travel time
@@ -554,7 +569,7 @@ if __name__ == "__main__":
     questions = [
         inquirer.List('fitness',
                       message="Choose the fitness do you want?",
-                      choices=['Number of stops', 'CO2 emission', 'Total delay', 'Travel time'],
+                      choices=['Number of stops', 'CO2 emission', 'Total delay', 'Total delay (using HCM)', 'Travel time'],
                       ),
     ]
     answers = inquirer.prompt(questions)
@@ -571,8 +586,10 @@ if __name__ == "__main__":
         fitnessFunctionID = 2
     elif answers["fitness"] == 'Total delay':
         fitnessFunctionID = 3
-    else:
+    elif answers["fitness"] == 'Total delay (using HCM)':
         fitnessFunctionID = 4
+    else:
+        fitnessFunctionID = 5
 
     iterations =  int(input('Enter the number of iterations:'))
     print("*****************************")
@@ -590,11 +607,7 @@ if __name__ == "__main__":
                "../city.net.xml", "-r", "../trips.trips.xml",
                "--max-num-vehicles={}".format(num_vehicles)
                ]
-
-    # sumoCmd = [sumoBinary, "-c", "../city.sumocfg", "-n",
-    #            "../city.net.xml", "-r", "../trips.trips.xml"
-    #            ]
-
+    
     traci.start(sumoCmd)
 
     # simulation_time = getSimulationTimeFromDB()
